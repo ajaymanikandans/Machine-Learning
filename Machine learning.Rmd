@@ -1,0 +1,127 @@
+---
+title: "Data Analysis on Activity Monitoring Device using Machine Learning Algorithm"
+author: "Ajay Manikandan Sankanran"
+date: "July 7, 2017"
+output: html_document
+---
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this analysis, we will use data from accelerometers on belt, forearm, arm, dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The five ways are exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Only Class A corresponds to correct performance. The goal of this project is to predict the manner in which they did the exercise, i.e., Class A to E. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har.
+
+## Data Processing
+
+### Importing data
+We first load te R packages needed to perform the data analysis.
+```{r, echo=TRUE}
+setwd("C:/Users/Ajay Manikandan/Desktop/Coursera/R programming/Machine learning")
+library(caret); library(rattle); library(rpart); library(rpart.plot); library(randomForest); library(repmis)
+```
+Now we download the testing and training dataset from the above mentioned website and save it in your working directory. 
+
+```{r, echo=TRUE}
+#import the data from the URLs
+#trainurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+#testurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+#training <- source_data(trainurl, na.strings = c("NA", "#DIV/0!", ""), header = TRUE)
+#testing <- source_data(testurl, na.strings = c("NA", "#DIV/0!", ""), header = TRUE)
+#Load the dataset from the directory
+training <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+str(training)
+```
+We can see that by using the `str` function the training dataset has 19622 observations and 160 variables, and the testing dataset contains 20 observations and 160 variables. We use this datasets to predict the outcome of `classe`
+
+### Data Cleaning
+We can see that the dataset contains a lot of NA values which is not useful for our analysis. Therefore, we are going to clean the dataset by removing the NA values.
+```{r, echo=TRUE}
+training <- training[, colSums(is.na(training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+```
+
+We also remove the first 7 variables as they are of no revelance to the analysis.
+```{r, echo=TRUE}
+Datatrain <- training[, -c(1:7)]
+Datatest <- testing[, -c(1:7)]
+```
+
+After cleaning the data we are able to see that there are only 53 variables that are required for our analysis.
+
+### Data splitting
+We split the training dataset for training and validation purpose. For reproducibility we set see
+```{r, echo=TRUE}
+set.seed(1234)
+intrain <- createDataPartition(Datatrain$classe, p = 0.7, list = FALSE)
+train_new <- Datatrain[intrain, ]
+valid_new <- Datatrain[-intrain, ]
+```
+
+## Prediction Algorithms
+We are going to use decision trees, random forest and generalized boosted regression(gbm)
+
+### Decision trees
+We are going to use 5-fold cross validation when implementing the algorithm.
+
+```{r, echo=TRUE}
+control <- trainControl(method = "cv", number = 5)
+fit_dt <- train(classe ~ . , data = train_new, method = "rpart",
+                trControl = control)
+print(fit_dt, digits = 4)
+```
+
+```{r, echo=TRUE}
+fancyRpartPlot(fit_dt$finalModel)
+```
+
+```{r,echo=TRUE}
+#predicting outcomes using validation dataset
+pred_dt <- predict(fit_dt, valid_new)
+#Prediction result
+(conf_dt <- confusionMatrix(valid_new$classe, pred_dt))
+```
+
+```{r,echo=TRUE}
+(accuracy_dt <- conf_dt$overall[1])
+```
+
+From the above confusion matrix we can see that predicting using decision trees yeilds a accuracy rate of 0.48 which is very low.
+
+### Random Forest
+Random forest machine learning algorithm is implemented.
+```{r, echo=TRUE}
+fit_rf <- train(classe ~., data = train_new, method = "rf",
+                trControl = control)
+print(fit_rf, digits = 4)
+```
+
+```{r, echo=TRUE}
+# Prediction of outcomes using validation dataset
+pred_rf <- predict(fit_rf, valid_new)
+(conf_rf <- confusionMatrix(valid_new$classe, pred_rf))
+```
+
+```{r, echo=TRUE}
+(accuracy_rf <- conf_rf$overall[1])
+```
+
+we can see that random forest algorithm yeilds a 99.5% accuracy.
+
+### Generalized boosted regression
+
+```{r, echo=TRUE}
+fit_gbm <- train(classe ~., data = train_new, method = "gbm",
+                 trControl = control, verbose = FALSE)
+pred_gbm <- predict(fit_gbm, valid_new)
+(conf_gbm <- confusionMatrix(valid_new$classe, pred_gbm))
+```
+
+```{r, echo=TRUE}
+(accuracy_gbm <- conf_gbm$overall[1])
+```
+
+When we compare the various Machine Learning algorithm implemented we are able to identfy that random forest algorithm is by far the best one with a accuracy of `99.5%`. Therefore, we are going to use random forest algorithm to predict the test dataset.
+
+## Prediction on test dataset
+```{r,echo=TRUE}
+(predict(fit_rf, testing))
+```
